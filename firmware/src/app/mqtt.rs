@@ -49,17 +49,19 @@ async fn run_session(stack: Stack<'static>) -> Result<(), SessionError> {
     // Resolve host (accept literal IP or DNS A record).
     let addr: IpAddress = if let Ok(ip) = IpAddr::from_str(host) {
         match ip {
-            IpAddr::V4(v4) => IpAddress::v4(v4.octets()[0], v4.octets()[1], v4.octets()[2], v4.octets()[3]),
+            IpAddr::V4(v4) => IpAddress::v4(
+                v4.octets()[0],
+                v4.octets()[1],
+                v4.octets()[2],
+                v4.octets()[3],
+            ),
             IpAddr::V6(_) => return Err(SessionError::Dns),
         }
     } else {
-        let v4s = stack
-            .dns_query(host, DnsQueryType::A)
-            .await
-            .map_err(|e| {
-                log::error!("DNS failed for {host}: {e:?}");
-                SessionError::Dns
-            })?;
+        let v4s = stack.dns_query(host, DnsQueryType::A).await.map_err(|e| {
+            log::error!("DNS failed for {host}: {e:?}");
+            SessionError::Dns
+        })?;
         *v4s.first().ok_or_else(|| {
             log::error!("DNS returned no A records for {host}");
             SessionError::Dns

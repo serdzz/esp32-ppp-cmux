@@ -30,8 +30,7 @@ pub struct Net {
 pub fn start(spawner: Spawner, dlc2: PppDlc) -> Net {
     static PPP_STATE: StaticCell<embassy_net_ppp::State<PPP_RX_FRAMES, PPP_TX_FRAMES>> =
         StaticCell::new();
-    let ppp_state =
-        PPP_STATE.init(embassy_net_ppp::State::<PPP_RX_FRAMES, PPP_TX_FRAMES>::new());
+    let ppp_state = PPP_STATE.init(embassy_net_ppp::State::<PPP_RX_FRAMES, PPP_TX_FRAMES>::new());
     let (device, ppp_runner) = embassy_net_ppp::new(ppp_state);
 
     let rng = Rng::new();
@@ -52,8 +51,6 @@ pub fn start(spawner: Spawner, dlc2: PppDlc) -> Net {
 }
 
 #[embassy_executor::task]
-async fn net_task(
-    mut runner: embassy_net::Runner<'static, embassy_net_ppp::Device<'static>>,
-) -> ! {
+async fn net_task(mut runner: embassy_net::Runner<'static, embassy_net_ppp::Device<'static>>) -> ! {
     runner.run().await
 }

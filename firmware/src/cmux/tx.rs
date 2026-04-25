@@ -9,7 +9,7 @@ use cmux_core::{frame, Frame, MAX_INFO_LEN};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embedded_io_async::Write as _;
-use esp_hal::{Async, uart::UartTx};
+use esp_hal::{uart::UartTx, Async};
 use heapless::Vec;
 
 /// Maximum queued outbound frames. Tuned for AT command bursts plus PPP
@@ -27,7 +27,10 @@ pub const TX_QUEUE_DEPTH: usize = 16;
 #[allow(dead_code)]
 pub enum TxReq {
     /// Data on a DLC. Always sent as a UIH-command frame from the host.
-    Data { dlci: u8, info: Vec<u8, MAX_INFO_LEN> },
+    Data {
+        dlci: u8,
+        info: Vec<u8, MAX_INFO_LEN>,
+    },
     /// SABM channel-open command. Caller awaits the matching UA via
     /// [`crate::cmux::dispatcher::ControlEvt`].
     Sabm(u8),

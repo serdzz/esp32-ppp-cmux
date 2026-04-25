@@ -66,7 +66,11 @@ impl FrameKind {
             Self::Disc => DISC,
             Self::Uih => UIH,
         };
-        if pf { base | PF_MASK } else { base }
+        if pf {
+            base | PF_MASK
+        } else {
+            base
+        }
     }
 }
 
@@ -102,7 +106,13 @@ mod tests {
 
     #[test]
     fn round_trip() {
-        for kind in [FrameKind::Sabm, FrameKind::Ua, FrameKind::Dm, FrameKind::Disc, FrameKind::Uih] {
+        for kind in [
+            FrameKind::Sabm,
+            FrameKind::Ua,
+            FrameKind::Dm,
+            FrameKind::Disc,
+            FrameKind::Uih,
+        ] {
             for pf in [false, true] {
                 let ctrl = kind.to_ctrl(pf);
                 assert_eq!(FrameKind::from_ctrl(ctrl), Some(kind));

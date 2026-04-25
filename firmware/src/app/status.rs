@@ -37,7 +37,9 @@ enum StatusError {
 }
 
 async fn poll(dlc1: &mut AtDlc, cmd: &str) -> Result<(), StatusError> {
-    dlc1.write_all(cmd.as_bytes()).await.map_err(|_| StatusError::Io)?;
+    dlc1.write_all(cmd.as_bytes())
+        .await
+        .map_err(|_| StatusError::Io)?;
     dlc1.write_all(b"\r").await.map_err(|_| StatusError::Io)?;
 
     let deadline = embassy_time::Instant::now() + Duration::from_secs(3);

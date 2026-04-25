@@ -10,7 +10,9 @@
 //! production after esp-hal-rng has been seeded post-boot per its docs.
 
 use embassy_net::tcp::TcpSocket;
-use embedded_tls::{Aes128GcmSha256, Certificate, TlsConfig, TlsConnection, TlsContext, UnsecureProvider};
+use embedded_tls::{
+    Aes128GcmSha256, Certificate, TlsConfig, TlsConnection, TlsContext, UnsecureProvider,
+};
 use rand_core::{CryptoRng, RngCore};
 
 use crate::config;

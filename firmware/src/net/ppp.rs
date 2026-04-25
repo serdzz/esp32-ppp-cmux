@@ -19,11 +19,7 @@ use crate::net::buffered::BufferedDlc;
 pub type PppDlc = DlcChannel<CriticalSectionRawMutex, DLC2_PIPE_BYTES>;
 
 #[embassy_executor::task]
-pub async fn ppp_task(
-    stack: Stack<'static>,
-    mut runner: Runner<'static>,
-    dlc2: PppDlc,
-) {
+pub async fn ppp_task(stack: Stack<'static>, mut runner: Runner<'static>, dlc2: PppDlc) {
     let config = Config {
         username: cfg::GPRS_USER.as_bytes(),
         password: cfg::GPRS_PASS.as_bytes(),
@@ -41,10 +37,7 @@ pub async fn ppp_task(
                 let _ = dns_servers.push(to_smoltcp(*s));
             }
             let smoltcp_addr = to_smoltcp(addr);
-            log::info!(
-                "PPP up: ip={addr}, dns={:?}",
-                dns_servers.as_slice()
-            );
+            log::info!("PPP up: ip={addr}, dns={:?}", dns_servers.as_slice());
             stack.set_config_v4(ConfigV4::Static(StaticConfigV4 {
                 // PPP is point-to-point — prefix 0 mirrors embassy's reference
                 // example (no on-link broadcast domain).

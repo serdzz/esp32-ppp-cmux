@@ -78,7 +78,9 @@ where
         format_args!("AT+CGDCONT=1,\"IP\",\"{}\"", config::APN),
     );
     io.cmd(&s).await.map_err(|_| Error::Cmd("CGDCONT"))?;
-    io.cmd("AT+CGATT=1").await.map_err(|_| Error::Cmd("CGATT"))?;
+    io.cmd("AT+CGATT=1")
+        .await
+        .map_err(|_| Error::Cmd("CGATT"))?;
 
     // 6) Switch to CMUX. Parameters: basic mode, no convergence, k=2, N1=127,
     //    T1=10×10ms, N2=3 retries, T2=30×10ms, T3=10s, k=2.
@@ -151,9 +153,7 @@ where
     /// `+CME ERROR` (failure). Intermediate lines (echo, intermediate
     /// responses, URCs) are logged at debug level.
     async fn cmd(&mut self, command: &str) -> Result<(), Error> {
-        self.write_line(command)
-            .await
-            .map_err(|_| Error::Io)?;
+        self.write_line(command).await.map_err(|_| Error::Io)?;
         let mut buf = [0u8; LINE_BUF];
         loop {
             let line = with_timeout(COMMAND_TIMEOUT, self.read_line(&mut buf))
@@ -198,11 +198,7 @@ where
             if len == buf.len() {
                 return Err(()); // line too long
             }
-            let n = self
-                .uart
-                .read(&mut buf[len..])
-                .await
-                .map_err(|_| ())?;
+            let n = self.uart.read(&mut buf[len..]).await.map_err(|_| ())?;
             if n == 0 {
                 continue;
             }
@@ -269,8 +265,7 @@ where
             }
             if let Some(rest) = trimmed.strip_prefix("+CREG:") {
                 // Parse the stat field — second comma-separated value.
-                let parts: heapless::Vec<&str, 5> =
-                    rest.split(',').map(str::trim).collect();
+                let parts: heapless::Vec<&str, 5> = rest.split(',').map(str::trim).collect();
                 if parts.len() >= 2 {
                     if let Ok(stat) = parts[1].parse::<u8>() {
                         if stat == 1 || stat == 5 {

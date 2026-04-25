@@ -10,7 +10,10 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::pipe::Pipe;
 use embassy_time::{with_timeout, Duration};
-use esp_hal::{Async, uart::{UartRx, UartTx}};
+use esp_hal::{
+    uart::{UartRx, UartTx},
+    Async,
+};
 use static_cell::StaticCell;
 
 pub mod channel;
@@ -18,7 +21,9 @@ pub mod dispatcher;
 pub mod tx;
 
 use channel::DlcChannel;
-use dispatcher::{ControlEvt, CtrlChan, Dlc1Pipe, Dlc2Pipe, Sinks, DLC1_PIPE_BYTES, DLC2_PIPE_BYTES};
+use dispatcher::{
+    ControlEvt, CtrlChan, Dlc1Pipe, Dlc2Pipe, Sinks, DLC1_PIPE_BYTES, DLC2_PIPE_BYTES,
+};
 use tx::{TxChan, TxReq};
 
 /// User-facing handles after CMUX is up.
@@ -56,11 +61,13 @@ pub async fn start(
     let tx_reqs: &'static TxChan = TX_REQS.init(Channel::new());
     let dlc1_rx: &'static Dlc1Pipe = DLC1_RX.init(Pipe::new());
     let dlc2_rx: &'static Dlc2Pipe = DLC2_RX.init(Pipe::new());
-    let sinks: &'static Sinks = SINKS.init(Sinks { dlc1: dlc1_rx, dlc2: dlc2_rx });
+    let sinks: &'static Sinks = SINKS.init(Sinks {
+        dlc1: dlc1_rx,
+        dlc2: dlc2_rx,
+    });
     let ctrl: &'static CtrlChan = CTRL.init(Channel::new());
 
-    spawner
-        .spawn(dispatcher::dispatcher_task(uart_rx, sinks, ctrl).unwrap());
+    spawner.spawn(dispatcher::dispatcher_task(uart_rx, sinks, ctrl).unwrap());
     spawner.spawn(tx::tx_task(uart_tx, tx_reqs).unwrap());
 
     for dlci in [0u8, 1, 2] {
@@ -74,7 +81,11 @@ pub async fn start(
     })
 }
 
-async fn open_dlc(dlci: u8, tx: &'static TxChan, ctrl: &'static CtrlChan) -> Result<(), StartError> {
+async fn open_dlc(
+    dlci: u8,
+    tx: &'static TxChan,
+    ctrl: &'static CtrlChan,
+) -> Result<(), StartError> {
     for attempt in 0..SABM_RETRIES {
         // Drain any stale UA event from a prior aborted attempt.
         while ctrl.try_receive().is_ok() {}

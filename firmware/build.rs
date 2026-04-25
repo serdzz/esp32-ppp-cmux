@@ -21,7 +21,12 @@ fn main() {
 
     let required = ["APN", "MQTT_HOST", "MQTT_PORT", "MQTT_CLIENT_ID"];
     let optional = [
-        "GPRS_USER", "GPRS_PASS", "MQTT_USER", "MQTT_PASS", "SIM_PIN", "MQTT_DNS",
+        "GPRS_USER",
+        "GPRS_PASS",
+        "MQTT_USER",
+        "MQTT_PASS",
+        "SIM_PIN",
+        "MQTT_DNS",
     ];
 
     for k in required {
@@ -59,7 +64,11 @@ fn main() {
     }
     println!("cargo:rustc-env=MQTT_CA_PEM_PATH={}", ca_target.display());
 
-    for k in required.iter().chain(optional.iter()).chain(&["MQTT_CA_PEM"]) {
+    for k in required
+        .iter()
+        .chain(optional.iter())
+        .chain(&["MQTT_CA_PEM"])
+    {
         println!("cargo:rerun-if-env-changed={k}");
     }
 }

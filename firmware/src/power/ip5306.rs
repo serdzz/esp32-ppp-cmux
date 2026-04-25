@@ -27,8 +27,16 @@ pub async fn keep_boost_on<I>(i2c: &mut I) -> Result<(), Error<I::Error>>
 where
     I: I2c,
 {
-    i2c.write(pmic_i2c::ADDR, &[pmic_i2c::REG_SYS_CTL0, pmic_i2c::VAL_BOOST_KEEP_ON]).await?;
-    i2c.write(pmic_i2c::ADDR, &[pmic_i2c::REG_SYS_CTL1, pmic_i2c::VAL_BOOST_2A]).await?;
+    i2c.write(
+        pmic_i2c::ADDR,
+        &[pmic_i2c::REG_SYS_CTL0, pmic_i2c::VAL_BOOST_KEEP_ON],
+    )
+    .await?;
+    i2c.write(
+        pmic_i2c::ADDR,
+        &[pmic_i2c::REG_SYS_CTL1, pmic_i2c::VAL_BOOST_2A],
+    )
+    .await?;
     log::info!("IP5306 boost-keep-on configured");
     Ok(())
 }

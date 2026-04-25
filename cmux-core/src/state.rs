@@ -53,9 +53,7 @@ mod tests {
 
     #[test]
     fn open_close_round_trip() {
-        let s = DlcState::Closed
-            .on_sabm_sent()
-            .on_ua_received();
+        let s = DlcState::Closed.on_sabm_sent().on_ua_received();
         assert_eq!(s, DlcState::Open);
 
         let s = s.on_disc_sent().on_ua_received();
@@ -64,7 +62,12 @@ mod tests {
 
     #[test]
     fn dm_in_any_state_closes() {
-        for s in [DlcState::Closed, DlcState::Opening, DlcState::Open, DlcState::Closing] {
+        for s in [
+            DlcState::Closed,
+            DlcState::Opening,
+            DlcState::Open,
+            DlcState::Closing,
+        ] {
             assert_eq!(s.on_dm_received(), DlcState::Closed);
         }
     }

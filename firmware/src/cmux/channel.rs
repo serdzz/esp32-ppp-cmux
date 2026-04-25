@@ -28,17 +28,23 @@ impl<M: embassy_sync::blocking_mutex::raw::RawMutex + 'static, const N: usize> D
     }
 }
 
-impl<M: embassy_sync::blocking_mutex::raw::RawMutex + 'static, const N: usize> ErrorType for DlcChannel<M, N> {
+impl<M: embassy_sync::blocking_mutex::raw::RawMutex + 'static, const N: usize> ErrorType
+    for DlcChannel<M, N>
+{
     type Error = Infallible;
 }
 
-impl<M: embassy_sync::blocking_mutex::raw::RawMutex + 'static, const N: usize> Read for DlcChannel<M, N> {
+impl<M: embassy_sync::blocking_mutex::raw::RawMutex + 'static, const N: usize> Read
+    for DlcChannel<M, N>
+{
     async fn read(&mut self, buf: &mut [u8]) -> Result<usize, Self::Error> {
         Ok(self.rx.read(buf).await)
     }
 }
 
-impl<M: embassy_sync::blocking_mutex::raw::RawMutex + 'static, const N: usize> Write for DlcChannel<M, N> {
+impl<M: embassy_sync::blocking_mutex::raw::RawMutex + 'static, const N: usize> Write
+    for DlcChannel<M, N>
+{
     async fn write(&mut self, buf: &[u8]) -> Result<usize, Self::Error> {
         // Chunk into 27.010 basic-mode MTU sized pieces. `chunks` guarantees
         // every slice is ≤ MAX_INFO_LEN, so the Vec push below is safe.
@@ -47,7 +53,12 @@ impl<M: embassy_sync::blocking_mutex::raw::RawMutex + 'static, const N: usize> W
             let mut info = heapless::Vec::new();
             // SAFETY of unwrap: chunk.len() ≤ MAX_INFO_LEN by construction.
             info.extend_from_slice(chunk).unwrap();
-            self.tx.send(TxReq::Data { dlci: self.dlci, info }).await;
+            self.tx
+                .send(TxReq::Data {
+                    dlci: self.dlci,
+                    info,
+                })
+                .await;
             written += chunk.len();
         }
         Ok(written)

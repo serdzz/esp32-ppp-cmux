@@ -11,7 +11,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::channel::Channel;
 use embassy_sync::pipe::Pipe;
 use embedded_io_async::Read;
-use esp_hal::{Async, uart::UartRx};
+use esp_hal::{uart::UartRx, Async};
 
 /// Per-DLC RX buffer sizing. PPP needs headroom for an MRU-1500 IP packet
 /// times worst-case HDLC escape ≈ 3 KB; round up to 4 KB. AT traffic is
