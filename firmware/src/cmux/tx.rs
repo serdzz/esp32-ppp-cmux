@@ -21,6 +21,10 @@ pub const TX_QUEUE_DEPTH: usize = 16;
 /// Message accepted by the TX task. Owned payload — the writer copies its
 /// slice into the `Vec` before queueing, which keeps the writer's stack
 /// frame free to be dropped while the TX task serialises.
+///
+/// `Disc` is not currently constructed — kept here so the TX serializer
+/// supports orderly channel teardown when the v2 supervisor lands.
+#[allow(dead_code)]
 pub enum TxReq {
     /// Data on a DLC. Always sent as a UIH-command frame from the host.
     Data { dlci: u8, info: Vec<u8, MAX_INFO_LEN> },

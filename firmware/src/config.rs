@@ -1,7 +1,11 @@
 //! Compile-time configuration sourced from the environment via build.rs.
 //!
 //! Keep this file the single point of contact for env values: every other
-//! module imports concrete `&'static str` constants from here.
+//! module imports concrete `&'static str` constants from here. Some
+//! constants are only consumed by the v2 MQTT framing wiring; allow
+//! dead-code while that's still TODO.
+
+#![allow(dead_code)]
 
 pub const APN: &str = env!("APN");
 pub const GPRS_USER: &str = env!("GPRS_USER");

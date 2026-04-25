@@ -45,7 +45,9 @@ pub async fn power_on(pins: &mut PowerPins<'_>) {
 }
 
 /// Drop RST low for the documented ≥ 105 ms, then release. Modem boots
-/// fresh; caller should re-await `RDY` afterwards.
+/// fresh; caller should re-await `RDY` afterwards. Reserved for the v2
+/// supervisor that retries bring-up on PPP drops.
+#[allow(dead_code)]
 pub async fn hardware_reset(pins: &mut PowerPins<'_>) {
     pins.rst.set_low();
     Timer::after(Duration::from_millis(110)).await;

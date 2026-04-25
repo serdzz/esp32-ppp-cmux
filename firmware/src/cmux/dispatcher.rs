@@ -28,14 +28,18 @@ pub struct Sinks {
 }
 
 /// Events emitted by the dispatcher for the bring-up / supervisor code.
+///
+/// `Disc` is unused in v1 (we never expect peer-initiated DISC for SIM800L)
+/// but is part of the surface for a future supervisor task.
+#[allow(dead_code)]
 #[derive(Copy, Clone, Debug)]
 pub enum ControlEvt {
     /// Peer accepted our SABM on this DLCI (UA received).
-    UaReceived(u8),
-    /// Peer reported the DLC as disconnected.
-    DmReceived(u8),
+    Ua(u8),
+    /// Peer reported the DLC as disconnected (DM received).
+    Dm(u8),
     /// Peer initiated DISC on this DLCI.
-    DiscReceived(u8),
+    Disc(u8),
 }
 
 pub const CTRL_QUEUE_DEPTH: usize = 8;
@@ -93,9 +97,9 @@ async fn process(frame: &FrameView<'_>, sinks: &Sinks, ctrl: &CtrlChan) {
         }
 
         // --- Control handshake --------------------------------------------
-        (_, FrameKind::Ua) => emit(ctrl, ControlEvt::UaReceived(dlci)).await,
-        (_, FrameKind::Dm) => emit(ctrl, ControlEvt::DmReceived(dlci)).await,
-        (_, FrameKind::Disc) => emit(ctrl, ControlEvt::DiscReceived(dlci)).await,
+        (_, FrameKind::Ua) => emit(ctrl, ControlEvt::Ua(dlci)).await,
+        (_, FrameKind::Dm) => emit(ctrl, ControlEvt::Dm(dlci)).await,
+        (_, FrameKind::Disc) => emit(ctrl, ControlEvt::Disc(dlci)).await,
 
         // SABM from the modem would mean the peer is opening a channel to us
         // — not expected for SIM800L (we are always the initiator). Log.

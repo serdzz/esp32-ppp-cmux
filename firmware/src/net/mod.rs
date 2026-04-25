@@ -5,4 +5,4 @@ pub mod ppp;
 pub mod stack;
 pub mod tls;
 
-pub use stack::{start, Net};
+pub use stack::start;

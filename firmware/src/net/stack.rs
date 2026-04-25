@@ -34,7 +34,7 @@ pub fn start(spawner: Spawner, dlc2: PppDlc) -> Net {
         PPP_STATE.init(embassy_net_ppp::State::<PPP_RX_FRAMES, PPP_TX_FRAMES>::new());
     let (device, ppp_runner) = embassy_net_ppp::new(ppp_state);
 
-    let mut rng = Rng::new();
+    let rng = Rng::new();
     let mut seed_bytes = [0u8; 8];
     rng.read(&mut seed_bytes);
     let seed = u64::from_le_bytes(seed_bytes);

@@ -27,6 +27,9 @@ pub struct Handles {
     pub dlc2: DlcChannel<CriticalSectionRawMutex, DLC2_PIPE_BYTES>,
 }
 
+// DLCI fields are surfaced via the `Debug` impl in the caller's log line —
+// rustc's dead-code analysis can't see through `{:?}`, so silence locally.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum StartError {
     /// Peer didn't acknowledge SABM within the timeout for this DLCI.
@@ -77,8 +80,8 @@ async fn open_dlc(dlci: u8, tx: &'static TxChan, ctrl: &'static CtrlChan) -> Res
         while ctrl.try_receive().is_ok() {}
         tx.send(TxReq::Sabm(dlci)).await;
         match with_timeout(SABM_TIMEOUT, ctrl.receive()).await {
-            Ok(ControlEvt::UaReceived(d)) if d == dlci => return Ok(()),
-            Ok(ControlEvt::DmReceived(d)) if d == dlci => return Err(StartError::Rejected(dlci)),
+            Ok(ControlEvt::Ua(d)) if d == dlci => return Ok(()),
+            Ok(ControlEvt::Dm(d)) if d == dlci => return Err(StartError::Rejected(dlci)),
             Ok(other) => {
                 log::debug!("DLC{dlci} open: ignoring {other:?} on attempt {attempt}");
             }

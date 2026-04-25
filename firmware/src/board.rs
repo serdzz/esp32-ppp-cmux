@@ -1,8 +1,11 @@
 //! TTGO T-Call v1.x pin map.
 //!
-//! Constants and a tiny `take_peripherals` helper. Anything that touches a
-//! specific GPIO/peripheral on this board imports from here so a future
-//! board variant can be slotted in without grepping the codebase.
+//! Single source of truth for board wiring. Some constants are referenced
+//! only by `main.rs` literals (esp-hal exposes GPIOs as types, not indexable
+//! by number) and exist as documentation — `#[allow(dead_code)]` reflects
+//! that intent.
+
+#![allow(dead_code)]
 
 /// SIM800L UART (single port to the modem; no HW flow control on T-Call).
 pub mod modem_uart {

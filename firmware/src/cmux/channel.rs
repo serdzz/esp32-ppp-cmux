@@ -22,6 +22,7 @@ impl<M: embassy_sync::blocking_mutex::raw::RawMutex + 'static, const N: usize> D
         Self { dlci, rx, tx }
     }
 
+    #[allow(dead_code)]
     pub fn dlci(&self) -> u8 {
         self.dlci
     }

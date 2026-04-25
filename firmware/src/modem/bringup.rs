@@ -18,10 +18,13 @@ const LINE_BUF: usize = 256;
 const COMMAND_TIMEOUT: Duration = Duration::from_millis(2_000);
 const REGISTRATION_TIMEOUT: Duration = Duration::from_secs(60);
 
+// String fields are read via the `Debug` impl (used in log::error! calls).
+// Rustc can't see through Debug, so it warns spuriously — silence locally.
+#[allow(dead_code)]
 #[derive(Debug)]
 pub enum Error {
     Timeout(&'static str),
-    AtError(&'static str),
+    Cmd(&'static str),
     Io,
     NotRegistered,
     SimLocked,
@@ -49,8 +52,8 @@ where
     }
     io.cmd("AT").await.map_err(|_| Error::Timeout("AT echo"))?;
 
-    io.cmd("ATE0").await.map_err(|_| Error::AtError("ATE0"))?;
-    io.cmd("AT+CMEE=2").await.map_err(|_| Error::AtError("CMEE"))?;
+    io.cmd("ATE0").await.map_err(|_| Error::Cmd("ATE0"))?;
+    io.cmd("AT+CMEE=2").await.map_err(|_| Error::Cmd("CMEE"))?;
 
     // 2) SIM PIN if configured.
     if !config::SIM_PIN.is_empty() {
@@ -74,14 +77,14 @@ where
         &mut s,
         format_args!("AT+CGDCONT=1,\"IP\",\"{}\"", config::APN),
     );
-    io.cmd(&s).await.map_err(|_| Error::AtError("CGDCONT"))?;
-    io.cmd("AT+CGATT=1").await.map_err(|_| Error::AtError("CGATT"))?;
+    io.cmd(&s).await.map_err(|_| Error::Cmd("CGDCONT"))?;
+    io.cmd("AT+CGATT=1").await.map_err(|_| Error::Cmd("CGATT"))?;
 
     // 6) Switch to CMUX. Parameters: basic mode, no convergence, k=2, N1=127,
     //    T1=10×10ms, N2=3 retries, T2=30×10ms, T3=10s, k=2.
     io.cmd("AT+CMUX=0,0,5,127,10,3,30,10,2")
         .await
-        .map_err(|_| Error::AtError("CMUX"))?;
+        .map_err(|_| Error::Cmd("CMUX"))?;
 
     log::info!("modem entered CMUX mode");
     Ok(())
@@ -114,7 +117,7 @@ where
             return Ok(());
         }
         if trimmed.starts_with("ERROR") || trimmed.starts_with("+CME ERROR") {
-            return Err(Error::AtError("CGDATA"));
+            return Err(Error::Cmd("CGDATA"));
         }
         log::debug!("ignoring line on DLC2 pre-PPP: {trimmed:?}");
     }
@@ -160,8 +163,8 @@ where
             let trimmed = line.trim();
             match trimmed {
                 "OK" => return Ok(()),
-                "ERROR" => return Err(Error::AtError("ERROR")),
-                s if s.starts_with("+CME ERROR") => return Err(Error::AtError("+CME ERROR")),
+                "ERROR" => return Err(Error::Cmd("ERROR")),
+                s if s.starts_with("+CME ERROR") => return Err(Error::Cmd("+CME ERROR")),
                 "" => {}
                 other => {
                     log::debug!("AT pass-through {command:?}: {other:?}");
