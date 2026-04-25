@@ -1,0 +1,8 @@
+# Workspace cargo config.
+#
+# The xtensa target is set per-package via firmware/.cargo/config.toml so that
+# `cargo test -p cmux-core` keeps using the host triple. The xtensa channel
+# from rust-toolchain.toml only kicks in for the firmware build.
+
+[env]
+ESP_LOG = "info"

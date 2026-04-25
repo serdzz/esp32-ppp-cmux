@@ -1,0 +1,48 @@
+[package]
+name         = "esp32-ppp-cmux-fw"
+version      = "0.1.0"
+edition      = { workspace = true }
+license      = { workspace = true }
+repository   = { workspace = true }
+rust-version = { workspace = true }
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[dependencies]
+# Embassy
+embassy-executor   = { workspace = true, features = ["executor-thread", "log"] }
+embassy-time       = { workspace = true, features = ["log"] }
+embassy-sync       = { workspace = true }
+embassy-futures    = { workspace = true }
+embassy-net        = { workspace = true, features = ["proto-ipv4", "tcp", "udp", "dns", "medium-ip", "log"] }
+embassy-net-ppp    = { workspace = true, features = ["log"] }
+
+# esp-rs
+esp-hal                = { workspace = true, features = ["esp32", "unstable", "log-04"] }
+esp-rtos               = { workspace = true, features = ["esp32", "embassy", "log-04"] }
+esp-bootloader-esp-idf = { workspace = true, features = ["esp32"] }
+esp-backtrace          = { workspace = true, features = ["esp32", "panic-handler", "println"] }
+esp-println            = { workspace = true, features = ["esp32", "log-04", "auto"] }
+esp-alloc              = { workspace = true, features = ["global-allocator"] }
+rand_core              = { workspace = true }
+
+# Generic embedded
+embedded-io        = { workspace = true }
+embedded-io-async  = { workspace = true }
+embedded-hal       = { workspace = true }
+embedded-hal-async = { workspace = true }
+heapless           = { workspace = true }
+static_cell        = { workspace = true }
+log                = { workspace = true }
+
+# Modem stack
+atat               = { workspace = true, features = ["derive", "log"] }
+embedded-tls       = { workspace = true, features = ["log"] }
+rust-mqtt          = { workspace = true, features = ["log", "alloc", "v5"] }
+
+# Local
+cmux-core          = { path = "../cmux-core" }
+
+[build-dependencies]
+dotenvy = "0.15"

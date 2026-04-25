@@ -1,0 +1,56 @@
+[workspace]
+resolver = "2"
+members = ["cmux-core", "firmware"]
+
+[workspace.package]
+edition      = "2021"
+license      = "MIT OR Apache-2.0"
+repository   = "https://github.com/sergejlepin/esp32-ppp-cmux"
+rust-version = "1.88"
+
+[workspace.dependencies]
+# Embassy stack
+embassy-executor   = { version = "0.10", default-features = false }
+embassy-time       = { version = "0.5",  default-features = false }
+embassy-sync       = { version = "0.8",  default-features = false }
+embassy-futures    = { version = "0.1",  default-features = false }
+embassy-net        = { version = "0.9",  default-features = false }
+embassy-net-ppp    = { version = "0.3",  default-features = false }
+
+# esp-rs (esp-hal 1.1 era — esp-rtos replaces esp-hal-embassy from 0.3)
+esp-hal                = { version = "1.1",  default-features = false }
+esp-rtos               = { version = "0.3",  default-features = false }
+esp-bootloader-esp-idf = { version = "0.5",  default-features = false }
+esp-backtrace          = { version = "0.19", default-features = false }
+esp-println            = { version = "0.17", default-features = false }
+esp-alloc              = { version = "0.10", default-features = false }
+rand_core              = { version = "0.6",  default-features = false }
+
+# Generic embedded
+embedded-io        = { version = "0.7",  default-features = false }
+embedded-io-async  = { version = "0.7",  default-features = false }
+embedded-hal       = { version = "1.0",  default-features = false }
+embedded-hal-async = { version = "1.0",  default-features = false }
+heapless           = { version = "0.9",  default-features = false }
+static_cell        = "2.1"
+log                = { version = "0.4",  default-features = false }
+
+# Modem stack
+atat               = { version = "0.24", default-features = false }
+embedded-tls       = { version = "0.18", default-features = false }
+# rust-mqtt 0.5 needs rustc ≥ 1.87 (uses NonZero::into_inner-like APIs);
+# the esp xtensa fork is older. Pin to the 0.4 line.
+rust-mqtt          = { version = "0.4",  default-features = false }
+
+[profile.dev]
+opt-level       = "s"
+debug           = 2
+lto             = false
+overflow-checks = true
+
+[profile.release]
+opt-level       = 3
+lto             = "fat"
+codegen-units   = 1
+debug           = 1
+overflow-checks = false

@@ -1,0 +1,5 @@
+# The "esp" toolchain is a rustc fork installed by espup; it ships with
+# rust-src already and does not accept the `components` field (rustup errors
+# with "toolchain options are ignored for a custom toolchain").
+[toolchain]
+channel = "esp"

@@ -1,0 +1,17 @@
+# Per-package cargo config: target only applies to firmware builds.
+# Workspace root has no [build] target so `cargo test -p cmux-core` keeps
+# using the host triple from the esp xtensa rustc fork.
+
+[build]
+target = "xtensa-esp32-none-elf"
+
+[target.xtensa-esp32-none-elf]
+runner    = "espflash flash --monitor --baud 921600"
+rustflags = [
+  # GNU LD (xtensa-esp-elf-gcc / esp-clang ships from espup)
+  "-C", "link-arg=-Wl,-Tlinkall.x",
+  "-C", "link-arg=-nostartfiles",
+]
+
+[unstable]
+build-std = ["alloc", "core"]

@@ -1,0 +1,13 @@
+/target
+**/target
+Cargo.lock.bak
+
+# Local secrets / certs
+.env
+firmware/certs/
+
+# Editor / OS noise
+.DS_Store
+.idea/
+.vscode/
+*.swp
