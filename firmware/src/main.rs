@@ -59,9 +59,10 @@ async fn main(spawner: Spawner) {
         pwkey: Output::new(peripherals.GPIO4, Level::High, OutputConfig::default()),
         rst: Output::new(peripherals.GPIO5, Level::High, OutputConfig::default()),
     };
-    power::sim800::power_on(&mut power_pins).await;
 
     // ---------------- Modem UART (single port, no flow control) -----------
+    // Initialise UART *before* the power sequence so the alive-probe can
+    // talk to a modem that survived a previous boot.
     let uart_cfg = UartConfig::default().with_baudrate(board::modem_uart::BAUD);
     let mut uart = Uart::new(peripherals.UART1, uart_cfg)
         .expect("UART1")
@@ -69,16 +70,25 @@ async fn main(spawner: Spawner) {
         .with_rx(peripherals.GPIO26)
         .into_async();
 
+    // Power on the modem only if it's not already responding. Prevents the
+    // ESP32-reboot-kills-modem cycle on T-Call without a healthy battery.
+    power::sim800::power_on_if_needed(&mut power_pins, || probe_at_alive(&mut uart)).await;
+
     // Wait a beat for SIM800L to print boot URCs (RDY, +CFUN: 1, etc.).
     Timer::after(Duration::from_secs(4)).await;
 
-    spawner.spawn(heartbeat().unwrap());
+    // Heartbeat is intentionally NOT spawned here — `esp-println` doesn't
+    // serialise its writes between tasks, so a concurrent log line during
+    // bring-up corrupts AT-related output. Spawn it once init is past the
+    // chatty phase.
 
     // ---------------- Raw AT init -> CMUX entry ---------------------------
     if let Err(e) = modem::bringup::raw_at_init(&mut uart).await {
         log::error!("modem raw AT init failed: {e:?}");
         idle_panic_loop().await;
     }
+
+    spawner.spawn(heartbeat().unwrap());
 
     // After OK to AT+CMUX=0,..., drain UART for ~50 ms before handing it
     // over — any non-frame byte breaks the multiplexer.
@@ -135,6 +145,40 @@ where
         }
     })
     .await;
+}
+
+/// Probe whether the modem is already up: send `AT\r` and look for `OK`
+/// within ~500 ms. Used by power_on_if_needed to skip the PWKEY pulse on
+/// an ESP32 reboot that left the modem alive.
+async fn probe_at_alive<U>(uart: &mut U) -> bool
+where
+    U: embedded_io_async::Read + embedded_io_async::Write + Unpin,
+{
+    use embedded_io_async::{Read, Write};
+    if uart.write_all(b"AT\r").await.is_err() {
+        return false;
+    }
+    let mut buf = [0u8; 64];
+    let mut acc = heapless::Vec::<u8, 256>::new();
+    let probe = async {
+        loop {
+            let n = match uart.read(&mut buf).await {
+                Ok(n) => n,
+                Err(_) => return false,
+            };
+            if acc.extend_from_slice(&buf[..n]).is_err() {
+                return false;
+            }
+            if let Ok(s) = core::str::from_utf8(&acc) {
+                if s.contains("\nOK") || s.contains("OK\r") {
+                    return true;
+                }
+            }
+        }
+    };
+    embassy_time::with_timeout(Duration::from_millis(500), probe)
+        .await
+        .unwrap_or(false)
 }
 
 async fn idle_panic_loop() -> ! {

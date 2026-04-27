@@ -16,7 +16,9 @@ use crate::config;
 
 const LINE_BUF: usize = 256;
 const COMMAND_TIMEOUT: Duration = Duration::from_millis(2_000);
-const REGISTRATION_TIMEOUT: Duration = Duration::from_secs(60);
+/// First-attach to 2G after a cold start can take 60-120 s while the modem
+/// scans bands and selects a cell. 180 s gives a comfortable margin.
+const REGISTRATION_TIMEOUT: Duration = Duration::from_secs(180);
 
 // String fields are read via the `Debug` impl (used in log::error! calls).
 // Rustc can't see through Debug, so it warns spuriously — silence locally.
@@ -55,6 +57,29 @@ where
     io.cmd("ATE0").await.map_err(|_| Error::Cmd("ATE0"))?;
     io.cmd("AT+CMEE=2").await.map_err(|_| Error::Cmd("CMEE"))?;
 
+    // Soft-reset radio to a known-clean state. Mirrors TinyGSM's restart
+    // sequence — without this, leftover URCs / pending PDP context from a
+    // previous boot interleave with our query/response loop and confuse the
+    // parser. CFUN=1,1 reboots; modem will print RDY again. Allow generous
+    // timeouts.
+    io.cmd_with_timeout("AT+CFUN=0", Duration::from_secs(10))
+        .await
+        .ok(); // best-effort; some firmware revisions reject CFUN=0
+    io.cmd_with_timeout("AT+CFUN=1,1", Duration::from_secs(10))
+        .await
+        .ok();
+    Timer::after(Duration::from_secs(5)).await;
+    // After reboot the modem prints RDY/+CPIN: READY/Call Ready URCs.
+    // Re-issue ATE0/CMEE; the previous settings are lost on warm boot.
+    for _ in 0..5 {
+        if io.cmd("AT").await.is_ok() {
+            break;
+        }
+        Timer::after(Duration::from_millis(200)).await;
+    }
+    io.cmd("ATE0").await.map_err(|_| Error::Cmd("ATE0 post-CFUN"))?;
+    io.cmd("AT+CMEE=2").await.ok();
+
     // 2) SIM PIN if configured.
     if !config::SIM_PIN.is_empty() {
         let mut s: String<32> = String::new();
@@ -72,15 +97,23 @@ where
     wait_for_registration(&mut io).await?;
 
     // 5) PDP context + GPRS attach.
+    //
+    // CGDCONT/CGATT failures are non-fatal here: the modem may reject GPRS
+    // attach with an empty APN (Tele2 LV needs `internet.tele2.lv`, etc.),
+    // but `AT+CGDATA="PPP",1` on DLC2 in start_ppp() will run its own
+    // attach attempt with the PPP-supplied PAP credentials. Logging the
+    // failure tells the user to fix their APN, but doesn't kill bring-up.
     let mut s: String<128> = String::new();
     let _ = core::fmt::Write::write_fmt(
         &mut s,
         format_args!("AT+CGDCONT=1,\"IP\",\"{}\"", config::APN),
     );
-    io.cmd(&s).await.map_err(|_| Error::Cmd("CGDCONT"))?;
-    io.cmd("AT+CGATT=1")
-        .await
-        .map_err(|_| Error::Cmd("CGATT"))?;
+    if let Err(e) = io.cmd(&s).await {
+        log::warn!("CGDCONT failed (continuing): {e:?}");
+    }
+    if let Err(e) = io.cmd_with_timeout("AT+CGATT=1", Duration::from_secs(15)).await {
+        log::warn!("CGATT failed (continuing — PPP will retry): {e:?}");
+    }
 
     // 6) Switch to CMUX. Parameters: basic mode, no convergence, k=2, N1=127,
     //    T1=10×10ms, N2=3 retries, T2=30×10ms, T3=10s, k=2.
@@ -153,10 +186,18 @@ where
     /// `+CME ERROR` (failure). Intermediate lines (echo, intermediate
     /// responses, URCs) are logged at debug level.
     async fn cmd(&mut self, command: &str) -> Result<(), Error> {
+        self.cmd_with_timeout(command, COMMAND_TIMEOUT).await
+    }
+
+    async fn cmd_with_timeout(
+        &mut self,
+        command: &str,
+        timeout: Duration,
+    ) -> Result<(), Error> {
         self.write_line(command).await.map_err(|_| Error::Io)?;
         let mut buf = [0u8; LINE_BUF];
         loop {
-            let line = with_timeout(COMMAND_TIMEOUT, self.read_line(&mut buf))
+            let line = with_timeout(timeout, self.read_line(&mut buf))
                 .await
                 .map_err(|_| Error::Timeout("AT cmd"))?
                 .map_err(|_| Error::Io)?;
@@ -171,6 +212,22 @@ where
                 }
             }
         }
+    }
+
+    /// Best-effort: read+discard every byte the modem has buffered for us.
+    /// Useful between phases to ensure stale URCs don't poison the next
+    /// query/response loop.
+    async fn drain(&mut self, window: Duration) {
+        self.leftover.clear();
+        let mut buf = [0u8; LINE_BUF];
+        let _ = with_timeout(window, async {
+            loop {
+                if self.uart.read(&mut buf).await.is_err() {
+                    return;
+                }
+            }
+        })
+        .await;
     }
 
     /// Read until `\n`, returning the line as a `&str` (without the newline).
@@ -248,40 +305,136 @@ async fn wait_for_registration<U>(io: &mut AtIo<'_, U>) -> Result<(), Error>
 where
     U: Read + Write + Unpin,
 {
+    // Burn any URCs queued from earlier phases (RDY, +CFUN: 1, Call Ready,
+    // SMS Ready, +CPIN: READY, ...). Otherwise the first query/response
+    // loop reads them as command output and the parser desyncs.
+    io.drain(Duration::from_millis(200)).await;
     let deadline = embassy_time::Instant::now() + REGISTRATION_TIMEOUT;
+    let mut tick: u32 = 0;
     loop {
-        // CREG response: "+CREG: <n>,<stat>[,<lac>,<ci>]" — stat 1 = home, 5 = roaming.
-        io.write_line("AT+CREG?").await.map_err(|_| Error::Io)?;
-        let mut buf = [0u8; LINE_BUF];
-        let mut registered = false;
-        loop {
-            let line = with_timeout(COMMAND_TIMEOUT, io.read_line(&mut buf))
-                .await
-                .map_err(|_| Error::Timeout("CREG"))?
-                .map_err(|_| Error::Io)?;
-            let trimmed = line.trim();
-            if trimmed == "OK" {
-                break;
-            }
-            if let Some(rest) = trimmed.strip_prefix("+CREG:") {
-                // Parse the stat field — second comma-separated value.
-                let parts: heapless::Vec<&str, 5> = rest.split(',').map(str::trim).collect();
-                if parts.len() >= 2 {
-                    if let Ok(stat) = parts[1].parse::<u8>() {
-                        if stat == 1 || stat == 5 {
-                            registered = true;
-                        }
-                    }
-                }
-            }
-        }
+        // CREG (CS) and CGREG (GPRS): "+(C)REG: <n>,<stat>[,<lac>,<ci>]"
+        // stat 1 = registered home, 5 = registered roaming.
+        // Tele2 LV (and many M2M-tuned networks) sometimes only attach GPRS,
+        // leaving CREG=0 while CGREG=1 — accept either.
+        let creg = query_reg(io, "AT+CREG?", "+CREG:").await.unwrap_or(255);
+        let cgreg = query_reg(io, "AT+CGREG?", "+CGREG:").await.unwrap_or(255);
+        let csq = query_csq(io).await.ok();
+        log::info!("registration tick {tick}: CSQ={csq:?} CREG={creg} CGREG={cgreg}");
+        let registered = matches!(creg, 1 | 5) || matches!(cgreg, 1 | 5);
         if registered {
-            log::info!("registered to network");
+            if let Ok(op) = query_cops(io).await {
+                log::info!("registered: operator={op:?}");
+            } else {
+                log::info!("registered to network");
+            }
             return Ok(());
         }
         if embassy_time::Instant::now() > deadline {
             return Err(Error::NotRegistered);
         }
-        Timer::after(Duration::from_millis(1_000)).await;
+        Timer::after(Duration::from_secs(5)).await;
+        tick = tick.wrapping_add(1);
+    }
+}
+
+/// Issue a `AT+CREG?` / `AT+CGREG?` query, return the `<stat>` field.
+///
+/// Tolerates both query response (`+(C)REG: <n>,<stat>[,...]`, 2+ fields)
+/// and the URC variant (`+(C)REG: <stat>`, 1 field) — Tele2 and many
+/// other operators send the URC right after `AT+CREG=2` is enabled, and
+/// it can race the query response.
+async fn query_reg<U>(io: &mut AtIo<'_, U>, cmd: &str, prefix: &str) -> Result<u8, Error>
+where
+    U: Read + Write + Unpin,
+{
+    io.write_line(cmd).await.map_err(|_| Error::Io)?;
+    let mut buf = [0u8; LINE_BUF];
+    let mut stat: Option<u8> = None;
+    loop {
+        let line = match with_timeout(COMMAND_TIMEOUT, io.read_line(&mut buf)).await {
+            Ok(Ok(l)) => l,
+            Ok(Err(_)) => {
+                log::warn!("{cmd}: read_line io error");
+                return Err(Error::Io);
+            }
+            Err(_) => {
+                log::warn!("{cmd}: timeout");
+                return Err(Error::Timeout("reg query"));
+            }
+        };
+        let trimmed = line.trim();
+        if trimmed == "OK" {
+            return stat.ok_or_else(|| {
+                log::warn!("{cmd}: OK but no parseable {prefix} line");
+                Error::Cmd("no reg line")
+            });
+        }
+        if trimmed.starts_with("ERROR") || trimmed.starts_with("+CME ERROR") {
+            log::warn!("{cmd}: {trimmed}");
+            return Err(Error::Cmd("reg ERROR"));
+        }
+        if let Some(rest) = trimmed.strip_prefix(prefix) {
+            let parts: heapless::Vec<&str, 5> = rest.split(',').map(str::trim).collect();
+            // Query response: <n>,<stat>[,<lac>,<ci>] — stat is parts[1]
+            // URC: <stat> — stat is parts[0]
+            let stat_field = if parts.len() >= 2 { parts[1] } else { parts[0] };
+            stat = stat_field.parse::<u8>().ok();
+        }
+    }
+}
+
+/// `AT+CSQ` → (rssi, ber). rssi 0..=31 (99 = unknown), ber 0..=7.
+async fn query_csq<U>(io: &mut AtIo<'_, U>) -> Result<(u8, u8), Error>
+where
+    U: Read + Write + Unpin,
+{
+    io.write_line("AT+CSQ").await.map_err(|_| Error::Io)?;
+    let mut buf = [0u8; LINE_BUF];
+    let mut out: Option<(u8, u8)> = None;
+    loop {
+        let line = with_timeout(COMMAND_TIMEOUT, io.read_line(&mut buf))
+            .await
+            .map_err(|_| Error::Timeout("CSQ"))?
+            .map_err(|_| Error::Io)?;
+        let trimmed = line.trim();
+        if trimmed == "OK" {
+            return out.ok_or(Error::Cmd("no CSQ line"));
+        }
+        if let Some(rest) = trimmed.strip_prefix("+CSQ:") {
+            let parts: heapless::Vec<&str, 2> = rest.split(',').map(str::trim).collect();
+            if parts.len() == 2 {
+                if let (Ok(r), Ok(b)) = (parts[0].parse(), parts[1].parse()) {
+                    out = Some((r, b));
+                }
+            }
+        }
+    }
+}
+
+/// `AT+COPS?` → operator name (best-effort).
+async fn query_cops<U>(io: &mut AtIo<'_, U>) -> Result<heapless::String<32>, Error>
+where
+    U: Read + Write + Unpin,
+{
+    io.write_line("AT+COPS?").await.map_err(|_| Error::Io)?;
+    let mut buf = [0u8; LINE_BUF];
+    let mut name: heapless::String<32> = heapless::String::new();
+    loop {
+        let line = with_timeout(COMMAND_TIMEOUT, io.read_line(&mut buf))
+            .await
+            .map_err(|_| Error::Timeout("COPS"))?
+            .map_err(|_| Error::Io)?;
+        let trimmed = line.trim();
+        if trimmed == "OK" {
+            return Ok(name);
+        }
+        if let Some(rest) = trimmed.strip_prefix("+COPS:") {
+            // +COPS: <mode>,<format>,"<oper>"[,<AcT>]
+            if let Some(start) = rest.find('"') {
+                if let Some(end) = rest[start + 1..].find('"') {
+                    let _ = name.push_str(&rest[start + 1..start + 1 + end]);
+                }
+            }
+        }
     }
 }
