@@ -141,8 +141,8 @@ Critical timing/ordering gotchas (don't lose these):
 
 | Signal | ESP32 GPIO |
 |---|---|
-| SIM800L TX → ESP32 RX (UART1) | 27 |
-| SIM800L RX ← ESP32 TX (UART1) | 26 |
+| SIM800L TX → ESP32 RX (UART1) | 26 |
+| SIM800L RX ← ESP32 TX (UART1) | 27 |
 | SIM800L RST | 5 |
 | SIM800L PWKEY | 4 |
 | SIM800L POWER_ON gate | 23 |

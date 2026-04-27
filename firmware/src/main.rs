@@ -65,8 +65,8 @@ async fn main(spawner: Spawner) {
     let uart_cfg = UartConfig::default().with_baudrate(board::modem_uart::BAUD);
     let mut uart = Uart::new(peripherals.UART1, uart_cfg)
         .expect("UART1")
-        .with_tx(peripherals.GPIO26)
-        .with_rx(peripherals.GPIO27)
+        .with_tx(peripherals.GPIO27)
+        .with_rx(peripherals.GPIO26)
         .into_async();
 
     // Wait a beat for SIM800L to print boot URCs (RDY, +CFUN: 1, etc.).

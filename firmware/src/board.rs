@@ -8,11 +8,17 @@
 #![allow(dead_code)]
 
 /// SIM800L UART (single port to the modem; no HW flow control on T-Call).
+///
+/// Pin assignment matches LilyGo's Arduino reference
+/// (`SerialAT.begin(115200, SERIAL_8N1, MODEM_RX=26, MODEM_TX=27)`):
+///   ESP32 RX (GPIO 26) ← SIM800L TX
+///   ESP32 TX (GPIO 27) → SIM800L RX
+/// Earlier guides flip this — empirical truth: 26=RX, 27=TX.
 pub mod modem_uart {
     /// ESP32 UART RX ← SIM800L TX
-    pub const RX_GPIO: u8 = 27;
+    pub const RX_GPIO: u8 = 26;
     /// ESP32 UART TX → SIM800L RX
-    pub const TX_GPIO: u8 = 26;
+    pub const TX_GPIO: u8 = 27;
     pub const BAUD: u32 = 115_200;
 }
 
